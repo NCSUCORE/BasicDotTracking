@@ -1,6 +1,6 @@
 function [rogG,rigG,uiG] = ...
     rayTrace(camPosVec,grnd2CamRotMat,dist2Glass,gammaH,gammaV,indOfRef,...
-    glassPlane,glassThickness,Periscope)
+    glassNormalVec,glassThickness)
 %RAYTRACE Function to trace a ray out from a camera, into the water channel
 
 %   INPUTS:
@@ -18,8 +18,8 @@ function [rogG,rigG,uiG] = ...
 %   desired sight line (rotation order is x then y)
 %   indOfRef - 3 element vector containing the indices of refraction [air,
 %   glass, water]
-%   glassPlane - string 'xy' or 'xz' describing the plane that the glass
-%   lies in
+%   glassNormalVec - unit normal vector pointing outwards from the glass,
+%   represented in the ground plane
 %   Important points in this geometry (lower case):
 %   o: point where the ray in question hits the outside of the glass
 %   i: point where the ray emerges on the inside of the glass
@@ -46,34 +46,15 @@ function [rogG,rigG,uiG] = ...
 %% Step 1: Get position of point where ray enters glass
 
 % unit vector normal to glass pointing out, in ground frame
-switch glassPlane
-    case 1 % xy plane
-        nG = [0 0 -1]';
-    case 2 % xz plane
-        nG = [0 1 0]';
-    case 3 % yz plane
-        nG = [1 0 0]';
-    otherwise
-        nG = [0 0 -1]';
-end
+nG = glassNormalVec(:);
+
 % rotate into cam frame
 nC    = grnd2CamRotMat*nG; % unit vector normal to glass pointing out, in camera frame
-umcC  = [0 0 -1]';         % unit vector pointing at m from c in C frame
-rmcC  = dist2Glass*umcC;   % vector pointing at m from c, in C frame
+rmcC  = dist2Glass*[0 0 -1]';   % vector pointing at m from c, in C frame
 
 % unit vector pointing from c to o in C frame
-uocC = [-tan(gammaV) tan(gammaH) -1]';
-
-uocCMag = sqrt(sum(uocC.^2));
-uocC = uocC./uocCMag;
-
-if Periscope ==1 
-R_correction = [cos(-0.5*pi) 0  sin(-0.5*pi);
-                   0      1     0 ;
-                  cos(-0.5*pi) 0  sin(-0.5*pi)];
-
-uocC = R_correction*uocC;
-end 
+uocC = [-tan(gammaV) tan(gammaH) -sqrt(1-tan(gammaV)^2-tan(tan(gammaH))^2)]';
+uocC = uocC./sqrt(sum(uocC.^2));
 % vector from c to o in C
 [rocC,~] = linePlaneIntersect(uocC,[0 0 0]',rmcC,[0 0 0]',nC);
 
