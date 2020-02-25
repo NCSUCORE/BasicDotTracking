@@ -40,7 +40,7 @@ end
 
 % Create boolean list to track which ones have been processed or not
 toDoList = true(size(signalObjs));
-doc speedgoat
+
 
 for jj = 1:10000 % Use a for loop with break condition instead of while loop
     
@@ -70,7 +70,7 @@ for jj = 1:10000 % Use a for loop with break condition instead of while loop
             origionalName = signalObjs(idx).Name(1:startIndex-1);
             cleanName = matlab.lang.makeValidName(origionalName);
             tsc.(cleanName) = timeseries();
-            tsc.(cleanName).Time
+%             tsc.(cleanName).Time
             % Find all signals with names that match that
             matchMask = regexp({signalObjs(:).Name},[origionalName '\(\d*\)']);
             matchMask = cellfun(@(x)~isempty(x),matchMask);
