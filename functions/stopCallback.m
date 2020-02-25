@@ -5,7 +5,6 @@ function stopCallback(model)
 % multidimensional signals are column vectors.  This has not been tested on
 % matrix-valued signals.
 
-% Must disconnect model 2 from target to run stopFcn and hence stopCallback
 
 % Print name of m file
 fprintf('\nRunning %s.m\n',mfilename)
@@ -18,6 +17,10 @@ fprintf('\nSetting working directory to\n%s\n',workDir);
 cd(workDir);
 
 fprintf('\nCompiling tsc\n')
+
+% Get the number of the model that is running
+modelNum = regexp(model,'\d*','match');
+modelNum = str2double(modelNum{1});
 
 % Note that sdi = "simulation data inspector"
 runIds = Simulink.sdi.getAllRunIDs(); % Get all run IDs from SDI
@@ -37,25 +40,27 @@ end
 
 % Create boolean list to track which ones have been processed or not
 toDoList = true(size(signalObjs));
+doc speedgoat
 
 for jj = 1:10000 % Use a for loop with break condition instead of while loop
     
     % Get the first element of the to-do list that has not been done
     idx = find(toDoList,1);
     sz = 'scalar';
-    if ~isempty(regexp(signalObjs(idx).Name,'\(\d\)','ONCE'))
+    if ~isempty(regexp(signalObjs(idx).Name,'\(\d*\)','ONCE'))
         sz = 'vector';
     end
-    if ~isempty(regexp(signalObjs(idx).Name,'\(\d,\d\)','ONCE'))
+    if ~isempty(regexp(signalObjs(idx).Name,'\(\d*,\d*\)','ONCE'))
         sz = 'matrix';
     end
-    
+
     switch sz
         case 'scalar'
             name = matlab.lang.makeValidName(signalObjs(idx).Name);
-            tsc.(name) = signalObjs(idx).Values;
-            tsc.(name).UserData.BlockPath = signalObjs(idx).BlockPath;
-            tsc.(name).UserData.PortIndex = signalObjs(idx).PortIndex;
+            tsc.(name) = timeseries();
+            tsc.(name).Time = signalObjs(jj).Values.Time;
+%             tsc.(name).UserData.BlockPath = signalObjs(idx).BlockPath;
+%             tsc.(name).UserData.PortIndex = signalObjs(idx).PortIndex;
             % Update the todo list
             toDoList(idx) = false;
         case 'vector'
@@ -64,6 +69,8 @@ for jj = 1:10000 % Use a for loop with break condition instead of while loop
             % Signal name is everything before that
             origionalName = signalObjs(idx).Name(1:startIndex-1);
             cleanName = matlab.lang.makeValidName(origionalName);
+            tsc.(cleanName) = timeseries();
+            tsc.(cleanName).Time
             % Find all signals with names that match that
             matchMask = regexp({signalObjs(:).Name},[origionalName '\(\d*\)']);
             matchMask = cellfun(@(x)~isempty(x),matchMask);
@@ -75,41 +82,39 @@ for jj = 1:10000 % Use a for loop with break condition instead of while loop
             for ii = 1:numel(matches) % For each data set with a matching name
                 % Get the index associated with it
                 index = regexp(matches(ii).Name,'\(\d*\)','match');
-                try
                 index = str2double(index{1}(2:end-1));
-                catch
-                    x = 1;
-                end
                 % Take the data and stuff it into the appropriate plate in tsc
                 tsc.(cleanName).Data(index,:,:) = matches(ii).Values.Data;
             end
-            
             % Update the todo list
             tsc.(cleanName).UserData.BlockPath = signalObjs(idx).BlockPath;
             tsc.(cleanName).UserData.PortIndex = signalObjs(idx).PortIndex;
             toDoList(matchMask) = false;
         case 'matrix'
             % Search for the (number) at the end of the signal name string
-            startIndex = regexp(signalObjs(idx).Name,'\(\d*');
+            startIndex = regexp(signalObjs(idx).Name,'\(\d*,\d*\)');
             % Signal name is everything before that
             name = matlab.lang.makeValidName(signalObjs(idx).Name(1:startIndex-1));
+
             % Find all signals with names that match that
-            matchMask = contains({signalObjs(:).Name},name);
-            matches = signalObjs(matchMask);
+            matchMask = regexp({signalObjs(:).Name},[name '\(\d*,\d*\)']);
+            matchMask = cellfun(@(x)~isempty(x),matchMask);
+            matches   = signalObjs(matchMask);
             
+            tsc.(name) = timeseries();
+            tsc.(name).Time = matches(1).Values.Time;
             for ii = 1:numel(matches) % For each data set with a matching name
                 % Get the index associated with it
-                index1 = regexp(matches(ii).Name,'\(\d,','match');
-                index1 = str2double(index1{1}(2:end-1));
-                index2 = regexp(matches(ii).Name,',\d\)','match');
-                index2 = str2double(index2{1}(2:end-1));
+                idx1 = regexp(matches(ii).Name,'\(\d*','match');
+                idx2 = regexp(matches(ii).Name,',\d*\)','match');
+                idx1 = regexp(idx1{1},'\d*','match');
+                idx2 = regexp(idx2{1},'\d*','match');
+                idx1 = str2double(idx1{1});
+                idx2 = str2double(idx2{1});
                 % Take the data and stuff it into the appropriate plate in tsc
-                tsc.(name).Data(index1,index2,:) = matches(ii).Values.Data;
+                tsc.(name).Data(idx1,idx2,:) = matches(ii).Values.Data;
             end
-            
             % Update the todo list
-            tsc.(name).UserData.BlockPath = signalObjs(idx).BlockPath;
-            tsc.(name).UserData.PortIndex = signalObjs(idx).PortIndex;
             toDoList(matchMask) = false;
            
     end
@@ -133,6 +138,6 @@ fprintf('\nSaving tsc and params to\n%s\n',fullfile(filePath,fileName))
 % Save the data to the output\data folder
 save(fullfile(filePath,fileName),'tsc')
 % Send tsc to the base workspace
-assignin('base','tsc',tsc)
+assignin('base',sprintf('tsc%d',modelNum),tsc)
 
 end
